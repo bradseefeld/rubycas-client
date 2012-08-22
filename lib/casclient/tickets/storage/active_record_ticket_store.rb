@@ -26,11 +26,22 @@ module CASClient
           session = controller.session
           session[:service_ticket] = st
         end
+        
+        def get_session_for_service_ticket(st)
+          session_id = read_service_session_lookup(st)
+          unless session_id.nil?
+            # This feels a bit hackish, but there isn't really a better way to go about it that I am aware of yet
+            session = ActiveRecord::SessionStore.session_class.find_by_session_id(session_id)
+          else
+            log.warn("Couldn't destroy session service ticket #{st} because no corresponding session id could be found.")
+          end
+          [session_id, session]
+        end
 
         def read_service_session_lookup(st)
           raise CASException, "No service_ticket specified." unless st
           st = st.ticket if st.kind_of? ServiceTicket
-          session = ActiveRecord::SessionStore::Session.find_by_service_ticket(st)
+          session = ::ActiveRecord::SessionStore::Session.find_by_service_ticket(st)
           session ? session.session_id : nil
         end
 
@@ -57,14 +68,12 @@ module CASClient
           pgtiou.destroy
 
           pgt
-
         end
-
       end
 
       ::ACTIVE_RECORD_TICKET_STORE = ActiveRecordTicketStore
 
-      class CasPgtiou < ActiveRecord::Base
+      class CasPgtiou < ::ActiveRecord::Base
         #t.string :pgt_iou, :null => false
         #t.string :pgt_id, :null => false
         #t.timestamps
